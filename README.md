@@ -124,104 +124,18 @@ class ThingsController < ApplicationController
                template:                       'things/show',
                file:                           "#{Rails.root}/files/foo.erb"
                layout:                         'pdf',                        # for a pdf.pdf.erb file
-               wkhtmltopdf:                    '/usr/local/bin/wkhtmltopdf', # path to binary
-               show_as_html:                   params.key?('debug'),         # allow debugging based on url param
-               orientation:                    'Landscape',                  # default Portrait
-               page_size:                      'A4, Letter, ...',            # default A4
-               page_height:                    NUMBER,
-               page_width:                     NUMBER,
-               save_to_file:                   Rails.root.join('pdfs', "#{filename}.pdf"),
-               save_only:                      false,                        # depends on :save_to_file being set first
-               default_protocol:               'http',
-               proxy:                          'TEXT',
-               basic_auth:                     false                         # when true username & password are automatically sent from session
-               username:                       'TEXT',
-               password:                       'TEXT',
-               title:                          'Alternate Title',            # otherwise first page title is used
-               cover:                          'URL, Pathname, or raw HTML string',
-               dpi:                            'dpi',
-               encoding:                       'TEXT',
-               user_style_sheet:               'URL',
-               cookie:                         ['_session_id SESSION_ID'], # could be an array or a single string in a 'name value' format
-               post:                           ['query QUERY_PARAM'],      # could be an array or a single string in a 'name value' format
-               redirect_delay:                 NUMBER,
-               javascript_delay:               NUMBER,
-               window_status:                  'TEXT',                     # wait to render until some JS sets window.status to the given string
-               image_quality:                  NUMBER,
-               no_pdf_compression:             true,
-               zoom:                           FLOAT,
-               page_offset:                    NUMBER,
-               book:                           true,
-               default_header:                 true,
-               disable_javascript:             false,
-               grayscale:                      true,
-               lowquality:                     true,
-               enable_plugins:                 true,
-               disable_internal_links:         true,
-               disable_external_links:         true,
-               print_media_type:               true,
-               disable_smart_shrinking:        true,
-               use_xserver:                    true,
-               background:                     false,                     # backround needs to be true to enable background colors to render
-               no_background:                  true,
-               viewport_size:                  'TEXT',                    # available only with use_xserver or patched QT
-               extra:                          '',                        # directly inserted into the command to wkhtmltopdf
-               outline: {   outline:           true,
-                            outline_depth:     LEVEL },
-               margin:  {   top:               SIZE,                     # default 10 (mm)
-                            bottom:            SIZE,
-                            left:              SIZE,
-                            right:             SIZE },
-               header:  {   html: {            template: 'users/header',          # use :template OR :url
-                                               layout:   'pdf_plain',             # optional, use 'pdf_plain' for a pdf_plain.html.pdf.erb file, defaults to main layout
-                                               url:      'www.example.com',
-                                               locals:   { foo: @bar }},
-                            center:            'TEXT',
-                            font_name:         'NAME',
-                            font_size:         SIZE,
-                            left:              'TEXT',
-                            right:             'TEXT',
-                            spacing:           REAL,
-                            line:              true,
-                            content:           'HTML CONTENT ALREADY RENDERED'}, # optionally you can pass plain html already rendered (useful if using pdf_from_string)
-               footer:  {   html: {   template:'shared/footer',         # use :template OR :url
-                                      layout:  'pdf_plain.html',        # optional, use 'pdf_plain' for a pdf_plain.html.pdf.erb file, defaults to main layout
-                                      url:     'www.example.com',
-                                      locals:  { foo: @bar }},
-                            center:            'TEXT',
-                            font_name:         'NAME',
-                            font_size:         SIZE,
-                            left:              'TEXT',
-                            right:             'TEXT',
-                            spacing:           REAL,
-                            line:              true,
-                            content:           'HTML CONTENT ALREADY RENDERED'}, # optionally you can pass plain html already rendered (useful if using pdf_from_string)
-               toc:     {   font_name:         "NAME",
-                            depth:             LEVEL,
-                            header_text:       "TEXT",
-                            header_fs:         SIZE,
-                            text_size_shrink:  0.8,
-                            l1_font_size:      SIZE,
-                            l2_font_size:      SIZE,
-                            l3_font_size:      SIZE,
-                            l4_font_size:      SIZE,
-                            l5_font_size:      SIZE,
-                            l6_font_size:      SIZE,
-                            l7_font_size:      SIZE,
-                            level_indentation: NUM,
-                            l1_indentation:    NUM,
-                            l2_indentation:    NUM,
-                            l3_indentation:    NUM,
-                            l4_indentation:    NUM,
-                            l5_indentation:    NUM,
-                            l6_indentation:    NUM,
-                            l7_indentation:    NUM,
-                            no_dots:           true,
-                            disable_dotted_lines:  true,
-                            disable_links:     true,
-                            disable_toc_links: true,
-                            disable_back_links:true,
-                            xsl_style_sheet:   'file.xsl'} # optional XSLT stylesheet to use for styling table of contents
+               printBackground: true, # Print background graphics. Defaults to false.
+               landscape: false, # Paper orientation. Defaults to false.
+               paperHeight: 11.69, # Paper height in inches. Defaults to 11 inches.
+               paperWidth: 8.27, # Paper width in inches. Defaults to 8.5 inches.
+               marginTop: 0.2,
+               marginBottom: 0.2,
+               marginLeft: 0.2,
+               marginRight: 0.2,
+               scale: 1, # Scale of the webpage rendering. Defaults to 1.
+               displayHeaderFooter: false, # Display header and footer. Defaults to false.
+               pageRanges: '', # Paper ranges to print, e.g., '1-5, 8, 11-13'.
+               pageCounterFunction: 'addPageNumbers'
       end
     end
   end
@@ -289,34 +203,45 @@ div.nobreak { page-break-inside: avoid; }
 
 ### Page Numbering
 
-A bit of javascript can help you number your pages. Create a template or header/footer file with this:
-```html
-<html>
-  <head>
-    <script>
-      function number_pages() {
-        var vars={};
-        var x=document.location.search.substring(1).split('&');
-        for(var i in x) {var z=x[i].split('=',2);vars[z[0]] = decodeURIComponent(z[1]);}
-        var x=['frompage','topage','page','webpage','section','subsection','subsubsection'];
-        for(var i in x) {
-          var y = document.getElementsByClassName(x[i]);
-          for(var j=0; j<y.length; ++j) y[j].textContent = vars[x[i]];
-        }
-      }
-    </script>
-  </head>
-  <body onload="number_pages()">
-    Page <span class="page"></span> of <span class="topage"></span>
-  </body>
-</html>
-```
-Anything with a class listed in "var x" above will be auto-filled at render time.
+A bit of javascript can help you number your pages.
+Use the option `pageCounterFunction` to define a function to draw page numbers.
 
-If you do not have explicit page breaks (and therefore do not have any "page" class), you can also use wkhtmltopdf's built in page number generation by setting one of the headers to "[page]":
-```ruby
-render pdf: 'filename', header: { right: '[page] of [topage]' }
+For example:
+```js
+window.addPageNumbers = function(count,
+                                 pageWidth,
+                                 pageHeight,
+                                 marginTop,
+                                 marginRight,
+                                 marginBottom,
+                                 marginLeft) {
+  // All units are in inches
+  var bottomPosition = 0.2;
+  var rightPosition = 0.9;
+  var pageHeightError = 0.0017; // empircal..
+
+  var $body = $('body#body_pdf');
+  $body.css('width', (pageWidth - marginLeft - marginRight) + 'in !important');
+  $body.css('margin', '0px !important');
+  $body.css('padding', '0px !important');
+
+  var i = 0;
+
+  var pageHeight = (pageHeight - marginTop - marginBottom + pageHeightError);
+  var firstPageNumberAt = pageHeight - bottomPosition;
+  var left = pageWidth - marginRight - marginLeft - rightPosition;
+
+  while (i < count) {
+    var top = firstPageNumberAt + (i*pageHeight);
+    var number = $("<div class='footer_page_number' style='position: absolute; left: "+left+"in; top: "+top+"in;'>Page "+(i+1)+" of "+count+"</div>");
+    number.appendTo('body');
+    i = i + 1;
+  }
+
+  return "Added "+count+" page numbers!";
+};
 ```
+
 ### Configuration
 
 You can put your default configuration, applied to all pdf's at "wicked_pdf.rb" initializer.
@@ -339,15 +264,7 @@ If you use the standard `render pdf: 'some_pdf'` in your app, you will want to e
 
 ### Further Reading
 
-Mike Ackerman's post [How To Create PDFs in Rails](https://www.viget.com/articles/how-to-create-pdfs-in-rails)
-
-Andreas Happe's post [Generating PDFs from Ruby on Rails](http://www.snikt.net/blog/2012/04/26/wicked-pdf/)
-
-JESii's post [WickedPDF, wkhtmltopdf, and Heroku...a tricky combination](http://www.nubyrubyrailstales.com/2013/06/wickedpdf-wkhtmltopdf-and-herokua.html)
-
-Berislav Babic's post [Send PDF attachments from Rails with WickedPdf and ActionMailer](http://berislavbabic.com/send-pdf-attachments-from-rails-with-wickedpdf-and-actionmailer/)
-
-StackOverflow [questions with the tag "wicked-pdf"](http://stackoverflow.com/questions/tagged/wicked-pdf)
+https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-printToPDF
 
 ### Debugging
 
@@ -380,6 +297,6 @@ You may have noticed: this plugin is heavily inspired by the PrinceXML plugin [p
 6. Push to the branch (`git push origin my-new-feature`)
 7. Create new Pull Request
 
-### Awesome Peoples
+### Awesome People
 
 Also, thanks to [unixmonkey](https://github.com/Unixmonkey), [galdomedia](http://github.com/galdomedia), [jcrisp](http://github.com/jcrisp), [lleirborras](http://github.com/lleirborras), [tiennou](http://github.com/tiennou), and everyone else for all their hard work and patience with my delays in merging in their enhancements.
