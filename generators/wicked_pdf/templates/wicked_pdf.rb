@@ -9,11 +9,9 @@
 # https://github.com/mileszs/wicked_pdf/blob/master/README.md
 
 WickedPdf.config = {
-  # Path to the wkhtmltopdf executable: This usually isn't needed if using
-  # one of the wkhtmltopdf-binary family of gems.
-  # exe_path: '/usr/local/bin/wkhtmltopdf',
-  #   or
-  # exe_path: Gem.bin_path('wkhtmltopdf-binary', 'wkhtmltopdf')
+  # Path to the Chrome executable (version 59 and above)
+  # Chrome Canary recommended as of June 2017
+  # chrome_path: '/Applications/Google\ Chrome\ Canary.app/Contents/MacOS/Google\ Chrome\ Canary',
 
   # Layout file to be used for all PDFs
   # (but can be overridden in `render :pdf` calls)

@@ -2,7 +2,7 @@
 
 ## A PDF generation plugin for Ruby on Rails
 
-Wicked PDF uses the shell utility [wkhtmltopdf](http://wkhtmltopdf.org) to serve a PDF file to a user from HTML.  In other words, rather than dealing with a PDF generation DSL of some sort, you simply write an HTML view as you would normally, then let Wicked PDF take care of the hard stuff.
+This version of Wicked PDF uses Chrome Headless (available from version 59) to serve a PDF file to a user from HTML.  In other words, rather than dealing with a PDF generation DSL of some sort, you simply write an HTML view as you would normally, then let Wicked PDF take care of the hard stuff.
 
 _Wicked PDF has been verified to work on Ruby versions 1.8.7 through 2.3; Rails 2 through 5.0_
 
@@ -24,28 +24,17 @@ Mime::Type.register "application/pdf", :pdf
 ```
 to `config/initializers/mime_types.rb` in older versions of Rails.
 
-Because `wicked_pdf` is a wrapper for  [wkhtmltopdf](http://wkhtmltopdf.org/), you'll need to install that, too.
+Because `wicked_pdf` is a wrapper for Chrome Headless, you'll need to install Chrome, too.
 
-The simplest way to install all of the binaries (Linux, OSX, Windows) is through the gem [wkhtmltopdf-binary](https://github.com/zakird/wkhtmltopdf_binary_gem).
-To install that, add a second gem
-
-```ruby
-gem 'wkhtmltopdf-binary'
-```
-
-To your Gemfile and run `bundle install`.
-
-This wrapper may trail in versions, at the moment it wraps the 0.9 version of `wkhtmltopdf` while there is 0.12 version available. Some of the advanced options listed below are not available with 0.9.
-
-If your wkhtmltopdf executable is not on your webserver's path, you can configure it in an initializer:
+`wicked_pdf` tries to guess the location of Chrome, but if it can't find it, you can configure its location in an initializer:
 
 ```ruby
 WickedPdf.config = {
-  exe_path: '/usr/local/bin/wkhtmltopdf'
+  exe_path: '/usr/local/bin/Chrome'
 }
 ```
 
-For more information about `wkhtmltopdf`, see the project's [homepage](http://wkhtmltopdf.org/).
+As of June 2017, we recommend using Chrome Canary which has a better support for printToPDF.
 
 ### Basic Usage
 ```ruby
@@ -62,7 +51,7 @@ end
 ```
 ### Usage Conditions - Important!
 
-The wkhtmltopdf binary is run outside of your Rails application; therefore, your normal layouts will not work. If you plan to use any CSS, JavaScript, or image files, you must modify your layout so that you provide an absolute reference to these files. The best option for Rails without the asset pipeline is to use the `wicked_pdf_stylesheet_link_tag`, `wicked_pdf_image_tag`, and `wicked_pdf_javascript_include_tag` helpers or to go straight to a CDN (Content Delivery Network) for popular libraries such as jQuery.
+Chrome is run outside of your Rails application; therefore, your normal layouts will not work. If you plan to use any CSS, JavaScript, or image files, you must modify your layout so that you provide an absolute reference to these files. The best option for Rails without the asset pipeline is to use the `wicked_pdf_stylesheet_link_tag`, `wicked_pdf_image_tag`, and `wicked_pdf_javascript_include_tag` helpers or to go straight to a CDN (Content Delivery Network) for popular libraries such as jQuery.
 
 #### wicked_pdf helpers
 ```html
@@ -239,19 +228,6 @@ class ThingsController < ApplicationController
 end
 ```
 By default, it will render without a layout (layout: false) and the template for the current controller and action.
-
-#### wkhtmltopdf Binary Options
-
-Some of the options above are being passed to `wkhtmltopdf` binary. They can be used to control the options used in Webkit rendering before generating the PDF.
-
-Examples of those options are:
-
-```ruby
-print_media_type: true        # Passes `--print-media-type`
-no_background: true           # Passes `--no-background`
-```
-
-You can see the complete list of options under "Global Options" in wkhtmltopdf usage [docs](http://wkhtmltopdf.org/usage/wkhtmltopdf.txt).
 
 ### Super Advanced Usage ###
 

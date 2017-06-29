@@ -4,6 +4,11 @@
 require 'logger'
 require 'digest/md5'
 require 'rbconfig'
+require 'webkit_remote'
+require 'base64'
+require 'timeout'
+require 'pdf-reader'
+require 'tempfile'
 
 if (RbConfig::CONFIG['target_os'] =~ /mswin|mingw/) && (RUBY_VERSION < '1.9')
   require 'win32/open3'
@@ -31,16 +36,16 @@ require 'wicked_pdf/middleware'
 class WickedPdf
   DEFAULT_BINARY_VERSION = Gem::Version.new('0.9.9')
   BINARY_VERSION_WITHOUT_DASHES = Gem::Version.new('0.12.0')
-  EXE_NAME = 'wkhtmltopdf'.freeze
+  EXE_NAMES = ['Google Chrome Canary', 'Google Chrome'].freeze
   @@config = {}
   cattr_accessor :config
   attr_accessor :binary_version
 
-  def initialize(wkhtmltopdf_binary_path = nil)
-    @exe_path = wkhtmltopdf_binary_path || find_wkhtmltopdf_binary_path
-    raise "Location of #{EXE_NAME} unknown" if @exe_path.empty?
-    raise "Bad #{EXE_NAME}'s path: #{@exe_path}" unless File.exist?(@exe_path)
-    raise "#{EXE_NAME} is not executable" unless File.executable?(@exe_path)
+  def initialize(chrome_binary_path = nil)
+    @exe_path = chrome_binary_path || find_chrome_binary_path
+    raise "Location of #{EXE_NAMES[1]} unknown" if @exe_path.empty?
+    raise "Bad #{EXE_NAMES[1]}'s path: #{@exe_path}" unless File.exist?(@exe_path)
+    raise "#{EXE_NAMES[1]} is not executable" unless File.executable?(@exe_path)
 
     retrieve_binary_version
   end
@@ -63,34 +68,145 @@ class WickedPdf
     string_file.close! if string_file
   end
 
+  def generate_port_number
+    rand(65_000 - 9222) + 9222
+  end
+
+  def try_to_connect(host, port)
+    Timeout::timeout(1) {
+      @client = WebkitRemote.remote host: host, port: port
+    }
+  end
+
+  def find_available_port(host)
+    port = generate_port_number
+    begin
+      t = TCPServer.new(host, port)
+    rescue Errno::EADDRINUSE
+      port = generate_port_number
+      retry
+    end
+    t.close
+    port
+  end
+
+  # Launch Chrome headless
+  def launch_chrome(host, port)
+    options = "--headless --disable-gpu --remote-debugging-port=#{port} about:blank"
+    cmd = @exe_path.gsub(' ', '\ ') + ' ' + options
+    print_command(cmd.inspect) if in_development_mode?
+
+    pid = spawn(cmd)
+    Rails.logger.info "Chrome running with pid: #{pid}, remote debugging port: #{port}"
+    sleep 0.2
+    pid
+  end
+
+  def connect_to_chrome(host, port)
+    connected = false
+    retry_count = 0
+    Rails.logger.info 'Trying to connect...'
+    until connected && retry_count < 30
+      begin
+        retry_count += 1
+        try_to_connect(host, port)
+        connected = true
+      rescue Errno::ECONNREFUSED, SocketError
+        sleep 0.01
+      end
+    end
+
+    if connected
+      Rails.logger.info '  Connected!'
+      sleep 0.1 # Need to wait a bit here before sending commands
+    else
+      Rails.logger.info ' Error: can\'t connect to Chrome'
+      raise "Couldn't connect to Chrome"
+    end
+  end
+
   def pdf_from_url(url, options = {})
     # merge in global config options
     options.merge!(WickedPdf.config) { |_key, option, _config| option }
-    generated_pdf_file = WickedPdfTempfile.new('wicked_pdf_generated_file.pdf', options[:temp_path])
-    command = [@exe_path]
-    command << '-q' unless on_windows? # suppress errors on stdout
-    command += parse_options(options)
-    command << url
-    command << generated_pdf_file.path.to_s
 
-    print_command(command.inspect) if in_development_mode?
+    Rails.logger.info "PDF options: #{options.inspect}"
 
-    err = Open3.popen3(*command) do |_stdin, _stdout, stderr|
-      stderr.read
+    host = '127.0.0.1'
+    port = find_available_port(host)
+
+    pid = launch_chrome(host, port)
+
+    connect_to_chrome(host, port)
+
+    @client.page_events = true
+    @client.network_events = true
+    @client.navigate_to url
+    time = Time.now
+    Rails.logger.info 'Waiting for page to load...'
+    @client.wait_for(type: WebkitRemote::Event::PageLoaded).last
+    Rails.logger.info "  #{Time.now - time}s"
+
+    Rails.logger.info 'Printing to PDF...'
+    t = Time.now
+    pdf_options = {
+      printBackground: options[:printBackground] || true,
+      landscape: options[:landscape] || false,
+      paperHeight: options[:paperHeight] || 11,
+      paperWidth: options[:paperWidth] || 8.5,
+      marginTop: options[:marginTop] || 0.4,
+      marginBottom: options[:marginBottom] || 0.4,
+      marginLeft: options[:marginLeft] || 0.4,
+      marginRight: options[:marginRight] || 0.4,
+      scale: options[:scale] || 1.0,
+      displayHeaderFooter: options[:displayHeaderFooter] || false,
+      pageRanges: options[:pageRanges] || ''
+    }
+
+    data = @client.rpc.call('Page.printToPDF', pdf_options)
+    pdf = Base64.decode64(data['data'])
+    Rails.logger.info "  PDF generated in #{Time.now - t} sec"
+
+    if options[:pageCounterFunction]
+      # 1. read the PDF to figure out the number of pages
+      # > https://github.com/yob/pdf-reader
+      Rails.logger.info 'Reading PDF...'
+      file = Tempfile.new(['print', '.pdf'])
+      file.binmode
+      file.write(pdf)
+      file.close
+      t = Time.now
+      reader = PDF::Reader.new(file.path)
+      page_count = reader.page_count
+      file.unlink
+      Rails.logger.info "  PDF has #{page_count} pages. #{Time.now - t} sec"
+
+      Rails.logger.info 'Adding page numbers...'
+      # 2. inject the number of pages in javascript and call page_numbering
+      javascript_eval = "#{options[:pageCounterFunction]}(#{page_count}, #{pdf_options[:paperWidth]}, #{pdf_options[:paperHeight]}, #{pdf_options[:marginTop]}, #{pdf_options[:marginRight]}, #{pdf_options[:marginBottom]}, #{pdf_options[:marginLeft]});"
+      Rails.logger.info '  ' + javascript_eval
+      result = @client.remote_eval javascript_eval
+      Rails.logger.info "  Done! #{result}"
+
+      # 3. re-print to PDF again
+      sleep 0.1
+      Rails.logger.info 'Re-printing to PDF...'
+      t = Time.now
+      data = @client.rpc.call('Page.printToPDF', pdf_options)
+      pdf = Base64.decode64(data['data'])
+      Rails.logger.info "  PDF generated in #{Time.now - t}s!"
     end
-    if options[:return_file]
-      return_file = options.delete(:return_file)
-      return generated_pdf_file
-    end
-    generated_pdf_file.rewind
-    generated_pdf_file.binmode
-    pdf = generated_pdf_file.read
+
+    @client.close
+    Process.kill 'TERM', pid
+    Rails.logger.info 'Closing Chrome!'
+    pid = nil
+
     raise "PDF could not be generated!\n Command Error: #{err}" if pdf && pdf.rstrip.empty?
     pdf
   rescue => e
-    raise "Failed to execute:\n#{command}\nError: #{e}"
+    raise "Failed to generate PDF\nError: #{e}"
   ensure
-    generated_pdf_file.close! if generated_pdf_file && !return_file
+    Process.kill 'TERM', pid unless pid.nil?
   end
 
   private
@@ -329,17 +445,13 @@ class WickedPdf
     r
   end
 
-  def find_wkhtmltopdf_binary_path
-    possible_locations = (ENV['PATH'].split(':') + %w(/usr/bin /usr/local/bin)).uniq
+  def find_chrome_binary_path
+    possible_locations = (ENV['PATH'].split(':') + %w(/usr/bin /usr/local/bin /Applications/Google\ Chrome\ Canary.app/Contents/MacOS /Applications/Google\ Chrome.app/Contents/MacOS)).uniq
     possible_locations += %w(~/bin) if ENV.key?('HOME')
-    exe_path ||= WickedPdf.config[:exe_path] unless WickedPdf.config.empty?
-    exe_path ||= begin
-      detected_path = (defined?(Bundler) ? `bundle exec which wkhtmltopdf` : `which wkhtmltopdf`).chomp
-      detected_path.present? && detected_path
-    rescue
-      nil
+    exe_path ||= WickedPdf.config[:chrome_path] unless WickedPdf.config.empty?
+    EXE_NAMES.each do |exe_name|
+      exe_path ||= possible_locations.map { |l| File.expand_path("#{l}/#{exe_name}") }.find { |location| File.exist?(location) }
     end
-    exe_path ||= possible_locations.map { |l| File.expand_path("#{l}/#{EXE_NAME}") }.find { |location| File.exist?(location) }
     exe_path || ''
   end
 end
