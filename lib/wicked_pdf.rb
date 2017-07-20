@@ -186,7 +186,7 @@ class WickedPdf
       Rails.logger.info "  Done! #{result}"
 
       # 3. re-print to PDF again
-      sleep 0.1
+      sleep 2
       Rails.logger.info 'Re-printing to PDF...'
       t = Time.now
       data = @client.rpc.call('Page.printToPDF', pdf_options)
