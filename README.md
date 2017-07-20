@@ -36,6 +36,16 @@ WickedPdf.config = {
 
 As of June 2017, we recommend using Chrome Canary which has a better support for printToPDF.
 
+Install Chrome Beta on Ubuntu:
+
+Download the .deb file from here: https://www.google.com/chrome/browser/beta.html?platform=linux
+
+Install using `sudo dpkg -i google-chrome-beta_current_amd64.deb`
+
+Install missing dependencies with `sudo apt-get -f install`
+
+Test if it's correctly installed with `/usr/bin/google-chrome --version`
+
 ### Basic Usage
 ```ruby
 class ThingsController < ApplicationController
@@ -218,7 +228,7 @@ window.addPageNumbers = function(count,
   // All units are in inches
   var bottomPosition = 0.2;
   var rightPosition = 0.9;
-  var pageHeightError = 0.0017; // empircal..
+  var pageHeightError = 0.0017; // empirical..
 
   var $body = $('body#body_pdf');
   $body.css('width', (pageWidth - marginLeft - marginRight) + 'in !important');
