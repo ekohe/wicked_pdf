@@ -6,7 +6,6 @@ require 'digest/md5'
 require 'rbconfig'
 require 'webkit_remote'
 require 'base64'
-require 'timeout'
 require 'pdf-reader'
 require 'tempfile'
 
@@ -73,9 +72,7 @@ class WickedPdf
   end
 
   def try_to_connect(host, port)
-    Timeout::timeout(1) {
-      @client = WebkitRemote.remote host: host, port: port
-    }
+    @client = WebkitRemote.remote host: host, port: port
   end
 
   def find_available_port(host)
@@ -98,7 +95,8 @@ class WickedPdf
 
     pid = spawn(cmd)
     Rails.logger.info "Chrome running with pid: #{pid}, remote debugging port: #{port}"
-    sleep 0.2
+    # Wait a bit for Chrome to be fully awake
+    sleep 2
     pid
   end
 
@@ -112,7 +110,7 @@ class WickedPdf
         try_to_connect(host, port)
         connected = true
       rescue Errno::ECONNREFUSED, SocketError
-        sleep 0.01
+        sleep 0.1
       end
     end
 
