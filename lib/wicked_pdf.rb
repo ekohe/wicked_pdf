@@ -36,7 +36,7 @@ require 'wicked_pdf/middleware'
 class WickedPdf
   DEFAULT_BINARY_VERSION = Gem::Version.new('0.9.9')
   BINARY_VERSION_WITHOUT_DASHES = Gem::Version.new('0.12.0')
-  EXE_NAMES = ['Google Chrome Canary', 'Google Chrome'].freeze
+  EXE_NAMES = ['google-chrome', 'Google Chrome Canary', 'Google Chrome'].freeze
   @@config = {}
   cattr_accessor :config
   attr_accessor :binary_version
