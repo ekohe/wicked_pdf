@@ -50,7 +50,17 @@ class WickedPdf
   end
 
   def pdf_from_html_file(filepath, options = {})
-    pdf_from_url("file:///#{filepath}", options)
+    pdf = pdf_from_url("file:///#{filepath}", options)
+    if options[:modify_pdf]
+      file = WickedPdfTempfile.new('temp.pdf')
+      file.binmode
+      file.write(pdf)
+      file.close
+      options[:modify_pdf].call(file.path, options)
+      File.read(file.path)
+    else
+      pdf
+    end
   end
 
   def pdf_from_string(string, options = {})
@@ -88,7 +98,7 @@ class WickedPdf
   end
 
   # Launch Chrome headless
-  def launch_chrome(host, port)
+  def launch_chrome(host, port, debug=false)
     options = "--headless --disable-gpu --remote-debugging-port=#{port} about:blank"
     cmd = @exe_path.gsub(' ', '\ ') + ' ' + options
     print_command(cmd.inspect) if in_development_mode?
@@ -134,6 +144,13 @@ class WickedPdf
 
     pid = launch_chrome(host, port)
 
+    if options[:debug] && in_development_mode?
+      Rails.logger.info "Debug mode - opening web page as well"
+      cmd = @exe_path.gsub(' ', '\ ') + ' ' + url
+      print_command(cmd.inspect) if in_development_mode?
+      spawn(cmd)
+    end
+
     connect_to_chrome(host, port)
 
     @client.page_events = true
@@ -163,36 +180,6 @@ class WickedPdf
     data = @client.rpc.call('Page.printToPDF', pdf_options)
     pdf = Base64.decode64(data['data'])
     Rails.logger.info "  PDF generated in #{Time.now - t} sec"
-
-    if options[:pageCounterFunction]
-      # 1. read the PDF to figure out the number of pages
-      # > https://github.com/yob/pdf-reader
-      Rails.logger.info 'Reading PDF...'
-      file = Tempfile.new(['print', '.pdf'])
-      file.binmode
-      file.write(pdf)
-      file.close
-      t = Time.now
-      reader = PDF::Reader.new(file.path)
-      page_count = reader.page_count
-      file.unlink
-      Rails.logger.info "  PDF has #{page_count} pages. #{Time.now - t} sec"
-
-      Rails.logger.info 'Adding page numbers...'
-      # 2. inject the number of pages in javascript and call page_numbering
-      javascript_eval = "#{options[:pageCounterFunction]}(#{page_count}, #{pdf_options[:paperWidth]}, #{pdf_options[:paperHeight]}, #{pdf_options[:marginTop]}, #{pdf_options[:marginRight]}, #{pdf_options[:marginBottom]}, #{pdf_options[:marginLeft]});"
-      Rails.logger.info '  ' + javascript_eval
-      result = @client.remote_eval javascript_eval
-      Rails.logger.info "  Done! #{result}"
-
-      # 3. re-print to PDF again
-      sleep 2
-      Rails.logger.info 'Re-printing to PDF...'
-      t = Time.now
-      data = @client.rpc.call('Page.printToPDF', pdf_options)
-      pdf = Base64.decode64(data['data'])
-      Rails.logger.info "  PDF generated in #{Time.now - t}s!"
-    end
 
     @client.close
     Process.kill 'TERM', pid

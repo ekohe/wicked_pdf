@@ -144,8 +144,7 @@ class ThingsController < ApplicationController
                marginRight: 0.2,
                scale: 1, # Scale of the webpage rendering. Defaults to 1.
                displayHeaderFooter: false, # Display header and footer. Defaults to false.
-               pageRanges: '', # Paper ranges to print, e.g., '1-5, 8, 11-13'.
-               pageCounterFunction: 'addPageNumbers'
+               pageRanges: '' # Paper ranges to print, e.g., '1-5, 8, 11-13'.
       end
     end
   end
@@ -213,43 +212,32 @@ div.nobreak { page-break-inside: avoid; }
 
 ### Page Numbering
 
-A bit of javascript can help you number your pages.
-Use the option `pageCounterFunction` to define a function to draw page numbers.
+You can modify the PDF after rendering using the modify_pdf option configuration.
+It accepts a block and allows you to modify the PDF.
 
-For example:
-```js
-window.addPageNumbers = function(count,
-                                 pageWidth,
-                                 pageHeight,
-                                 marginTop,
-                                 marginRight,
-                                 marginBottom,
-                                 marginLeft) {
-  // All units are in inches
-  var bottomPosition = 0.2;
-  var rightPosition = 0.9;
-  var pageHeightError = 0.0017; // empirical..
+You can add page numbers using the following hook and the hexapdf gem:
 
-  var $body = $('body#body_pdf');
-  $body.css('width', (pageWidth - marginLeft - marginRight) + 'in !important');
-  $body.css('margin', '0px !important');
-  $body.css('padding', '0px !important');
+```ruby
+WickedPdf.config = {
+  modify_pdf: -> (filename, options) {
+      class AddPageNumberProcessor < HexaPDF::Content::Processor
+        def initialize(page, index, total)
+          super()
+          @canvas = page.canvas(type: :overlay)
+          @canvas.font('Helvetica', size: 10)
+          @canvas.text("#{index} / #{total}", at: [520, 25])
+        end
+      end
 
-  var i = 0;
-
-  var pageHeight = (pageHeight - marginTop - marginBottom + pageHeightError);
-  var firstPageNumberAt = pageHeight - bottomPosition;
-  var left = pageWidth - marginRight - marginLeft - rightPosition;
-
-  while (i < count) {
-    var top = firstPageNumberAt + (i*pageHeight);
-    var number = $("<div class='footer_page_number' style='position: absolute; left: "+left+"in; top: "+top+"in;'>Page "+(i+1)+" of "+count+"</div>");
-    number.appendTo('body');
-    i = i + 1;
-  }
-
-  return "Added "+count+" page numbers!";
-};
+      doc = HexaPDF::Document.open(filename)
+      page_count = doc.pages.count
+      doc.pages.each_with_index do |page, index|
+        processor = AddPageNumberProcessor.new(page, (index + 1), page_count)
+        page.process_contents(processor)
+      end
+      doc.write(filename)
+    }
+}
 ```
 
 ### Configuration
