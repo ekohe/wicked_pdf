@@ -6,7 +6,6 @@ require 'digest/md5'
 require 'rbconfig'
 require 'webkit_remote'
 require 'base64'
-require 'pdf-reader'
 require 'tempfile'
 
 if (RbConfig::CONFIG['target_os'] =~ /mswin|mingw/) && (RUBY_VERSION < '1.9')
