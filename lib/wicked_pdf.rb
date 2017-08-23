@@ -52,15 +52,20 @@ class WickedPdf
   def pdf_from_html_file(filepath, options = {})
     pdf = pdf_from_url("file:///#{filepath}", options)
     if options[:modify_pdf]
+      t = Time.now
+      # Create temporary file
       file = WickedPdfTempfile.new('temp.pdf')
       file.binmode
       file.write(pdf)
       file.close
+      # Run hook
       options[:modify_pdf].call(file.path, options)
-      File.read(file.path)
-    else
-      pdf
+
+      # Read PDF file again
+      pdf = File.read(file.path)
+      Rails.logger.info " modify_pdf callback executed in #{Time.now - t} sec"
     end
+    pdf
   end
 
   def pdf_from_string(string, options = {})
