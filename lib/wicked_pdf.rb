@@ -4,7 +4,7 @@
 require 'logger'
 require 'digest/md5'
 require 'rbconfig'
-require 'webkit_remote'
+require 'chrome_remote'
 require 'base64'
 require 'tempfile'
 
@@ -49,22 +49,7 @@ class WickedPdf
   end
 
   def pdf_from_html_file(filepath, options = {})
-    pdf = pdf_from_url("file:///#{filepath}", options)
-    if options[:modify_pdf]
-      t = Time.now
-      # Create temporary file
-      file = WickedPdfTempfile.new('temp.pdf')
-      file.binmode
-      file.write(pdf)
-      file.close
-      # Run hook
-      options[:modify_pdf].call(file.path, options)
-
-      # Read PDF file again
-      pdf = File.read(file.path)
-      Rails.logger.info " modify_pdf callback executed in #{Time.now - t} sec"
-    end
-    pdf
+    pdf_from_url("file:///#{filepath}", options)
   end
 
   def pdf_from_string(string, options = {})
@@ -86,7 +71,7 @@ class WickedPdf
   end
 
   def try_to_connect(host, port)
-    @client = WebkitRemote.remote host: host, port: port
+    @client = ChromeRemote.client host: host, port: port
   end
 
   def find_available_port(host)
@@ -141,8 +126,6 @@ class WickedPdf
     # merge in global config options
     options.merge!(WickedPdf.config) { |_key, option, _config| option }
 
-    Rails.logger.info "PDF options: #{options.inspect}"
-
     host = '127.0.0.1'
     port = find_available_port(host)
 
@@ -157,12 +140,12 @@ class WickedPdf
 
     connect_to_chrome(host, port)
 
-    @client.page_events = true
-    @client.network_events = true
-    @client.navigate_to url
+    @client.send_cmd "Page.enable"
+    @client.send_cmd "Network.enable"
+    @client.send_cmd "Page.navigate", url: url
     time = Time.now
     Rails.logger.info 'Waiting for page to load...'
-    @client.wait_for(type: WebkitRemote::Event::PageLoaded).last
+    @client.wait_for "Page.loadEventFired"
     Rails.logger.info "  #{Time.now - time}s"
 
     Rails.logger.info 'Printing to PDF...'
@@ -178,14 +161,17 @@ class WickedPdf
       marginRight: options[:marginRight] || 0.4,
       scale: options[:scale] || 1.0,
       displayHeaderFooter: options[:displayHeaderFooter] || false,
-      pageRanges: options[:pageRanges] || ''
+      pageRanges: options[:pageRanges] || '',
+      headerTemplate: options[:header] && options[:header][:html] ? options[:header][:html][:string] : nil,
+      footerTemplate: options[:footer] && options[:footer][:html] ? options[:footer][:html][:string] : nil
     }
 
-    data = @client.rpc.call('Page.printToPDF', pdf_options)
+    Rails.logger.info "PDF options: #{pdf_options.inspect}"
+
+    data = @client.send_cmd 'Page.printToPDF', pdf_options
     pdf = Base64.decode64(data['data'])
     Rails.logger.info "  PDF generated in #{Time.now - t} sec"
 
-    @client.close
     Process.kill 'TERM', pid
     Rails.logger.info 'Closing Chrome!'
     pid = nil

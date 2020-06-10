@@ -23,7 +23,7 @@ desc
   spec.require_paths = ['lib']
 
   spec.add_dependency 'activesupport'
-  spec.add_dependency 'webkit_remote'
+  spec.add_dependency 'chrome_remote'
 
   spec.add_development_dependency 'rails'
   spec.add_development_dependency 'bundler', '~> 1.3'

@@ -117,8 +117,6 @@ class WickedPdf
     def prerender_header_and_footer(options)
       [:header, :footer].each do |hf|
         next unless options[hf] && options[hf][:html] && options[hf][:html][:template]
-        @hf_tempfiles = [] unless defined?(@hf_tempfiles)
-        @hf_tempfiles.push(tf = WickedPdfTempfile.new("wicked_#{hf}_pdf.html"))
         options[hf][:html][:layout] ||= options[:layout]
         render_opts = {
           :template => options[hf][:html][:template],
@@ -128,9 +126,7 @@ class WickedPdf
         }
         render_opts[:locals] = options[hf][:html][:locals] if options[hf][:html][:locals]
         render_opts[:file] = options[hf][:html][:file] if options[:file]
-        tf.write render_to_string(render_opts)
-        tf.flush
-        options[hf][:html][:url] = "file:///#{tf.path}"
+        options[hf][:html][:string] = render_to_string(render_opts)
       end
       options
     end
