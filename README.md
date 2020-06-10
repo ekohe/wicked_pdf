@@ -210,36 +210,6 @@ div.nobreak:before { clear:both; }
 div.nobreak { page-break-inside: avoid; }
 ```
 
-### Page Numbering
-
-You can modify the PDF after rendering using the modify_pdf option configuration.
-It accepts a block and allows you to modify the PDF.
-
-You can add page numbers using the following hook and the hexapdf gem:
-
-```ruby
-WickedPdf.config = {
-  modify_pdf: -> (filename, options) {
-      class AddPageNumberProcessor < HexaPDF::Content::Processor
-        def initialize(page, index, total)
-          super()
-          @canvas = page.canvas(type: :overlay)
-          @canvas.font('Helvetica', size: 10)
-          @canvas.text("#{index} / #{total}", at: [520, 25])
-        end
-      end
-
-      doc = HexaPDF::Document.open(filename)
-      page_count = doc.pages.count
-      doc.pages.each_with_index do |page, index|
-        processor = AddPageNumberProcessor.new(page, (index + 1), page_count)
-        page.process_contents(processor)
-      end
-      doc.write(filename)
-    }
-}
-```
-
 ### Configuration
 
 You can put your default configuration, applied to all pdf's at "wicked_pdf.rb" initializer.
