@@ -166,8 +166,6 @@ class WickedPdf
       footerTemplate: options[:footer] && options[:footer][:html] ? options[:footer][:html][:string] : nil
     }
 
-    Rails.logger.info "PDF options: #{pdf_options.inspect}"
-
     data = @client.send_cmd 'Page.printToPDF', pdf_options
     pdf = Base64.decode64(data['data'])
     Rails.logger.info "  PDF generated in #{Time.now - t} sec"
