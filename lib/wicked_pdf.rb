@@ -162,8 +162,8 @@ class WickedPdf
       scale: options[:scale] || 1.0,
       displayHeaderFooter: options[:displayHeaderFooter] || false,
       pageRanges: options[:pageRanges] || '',
-      headerTemplate: options[:header] && options[:header][:html] ? options[:header][:html][:string] : nil,
-      footerTemplate: options[:footer] && options[:footer][:html] ? options[:footer][:html][:string] : nil
+      headerTemplate: options[:header] && options[:header][:html] ? options[:header][:html][:string] : '',
+      footerTemplate: options[:footer] && options[:footer][:html] ? options[:footer][:html][:string] : ''
     }
 
     data = @client.send_cmd 'Page.printToPDF', pdf_options
