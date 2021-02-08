@@ -13,7 +13,16 @@ WickedPdf.config = {
   # Chrome Canary recommended as of June 2017
   # chrome_path: '/Applications/Google\ Chrome\ Canary.app/Contents/MacOS/Google\ Chrome\ Canary',
 
+  # Needed for wkhtmltopdf 0.12.6+ to use many wicked_pdf asset helpers
+  # enable_local_file_access: true,
+
   # Layout file to be used for all PDFs
   # (but can be overridden in `render :pdf` calls)
   # layout: 'pdf.html',
+
+  # Using wkhtmltopdf without an X server can be achieved by enabling the
+  # 'use_xvfb' flag. This will wrap all wkhtmltopdf commands around the
+  # 'xvfb-run' command, in order to simulate an X server.
+  #
+  # use_xvfb: true,
 }

@@ -1,4 +1,6 @@
-require 'open-uri'
+require 'net/http'
+# If webpacker is used, need to check for version
+require 'webpacker/version' if defined?(Webpacker)
 
 class WickedPdf
   module WickedPdfHelper
@@ -8,8 +10,23 @@ class WickedPdf
       def wicked_pdf_asset_base64(path)
         asset = find_asset(path)
         raise "Could not find asset '#{path}'" if asset.nil?
+
         base64 = Base64.encode64(asset.to_s).gsub(/\s+/, '')
         "data:#{asset.content_type};base64,#{Rack::Utils.escape(base64)}"
+      end
+
+      # Using `image_tag` with URLs when generating PDFs (specifically large PDFs with lots of pages) can cause buffer/stack overflows.
+      #
+      def wicked_pdf_url_base64(url)
+        response = Net::HTTP.get_response(URI(url))
+
+        if response.is_a?(Net::HTTPSuccess)
+          base64 = Base64.encode64(response.body).gsub(/\s+/, '')
+          "data:#{response.content_type};base64,#{Rack::Utils.escape(base64)}"
+        else
+          Rails.logger.warn("[wicked_pdf] #{response.code} #{response.message}: #{url}")
+          nil
+        end
       end
 
       def wicked_pdf_stylesheet_link_tag(*sources)
@@ -25,6 +42,33 @@ class WickedPdf
             "url(#{wicked_pdf_asset_path(Regexp.last_match[1])})"
           end
         end.html_safe
+      end
+
+      def wicked_pdf_stylesheet_pack_tag(*sources)
+        return unless defined?(Webpacker)
+
+        if running_in_development?
+          stylesheet_pack_tag(*sources)
+        else
+          css_text = sources.collect do |source|
+            source = WickedPdfHelper.add_extension(source, 'css')
+            wicked_pdf_stylesheet_link_tag(webpacker_source_url(source))
+          end.join("\n")
+          css_text.respond_to?(:html_safe) ? css_text.html_safe : css_text
+        end
+      end
+
+      def wicked_pdf_javascript_pack_tag(*sources)
+        return unless defined?(Webpacker)
+
+        if running_in_development?
+          javascript_pack_tag(*sources)
+        else
+          sources.collect do |source|
+            source = WickedPdfHelper.add_extension(source, 'js')
+            "<script type='text/javascript'>#{read_asset(webpacker_source_url(source))}</script>"
+          end.join("\n").html_safe
+        end
       end
 
       def wicked_pdf_image_tag(img, options = {})
@@ -48,6 +92,16 @@ class WickedPdf
           pathname
         else
           "file:///#{pathname}"
+        end
+      end
+
+      def wicked_pdf_asset_pack_path(asset)
+        return unless defined?(Webpacker)
+
+        if running_in_development?
+          asset_pack_path(asset)
+        else
+          wicked_pdf_asset_path webpacker_source_url(asset)
         end
       end
 
@@ -79,9 +133,9 @@ class WickedPdf
 
       def find_asset(path)
         if Rails.application.assets.respond_to?(:find_asset)
-          Rails.application.assets.find_asset(path)
+          Rails.application.assets.find_asset(path, :base_path => Rails.application.root.to_s)
         else
-          Sprockets::Railtie.build_environment(Rails.application).find_asset(path)
+          Sprockets::Railtie.build_environment(Rails.application).find_asset(path, :base_path => Rails.application.root.to_s)
         end
       end
 
@@ -98,7 +152,8 @@ class WickedPdf
       end
 
       def precompiled_or_absolute_asset?(source)
-        Rails.configuration.assets.compile == false ||
+        !Rails.configuration.respond_to?(:assets) ||
+          Rails.configuration.assets.compile == false ||
           source.to_s[0] == '/' ||
           source.to_s.match(/\Ahttps?\:\/\//)
       end
@@ -117,8 +172,8 @@ class WickedPdf
       end
 
       def read_from_uri(uri)
-        encoding = ':UTF-8' if RUBY_VERSION > '1.8'
-        asset = open(uri, "r#{encoding}", &:read)
+        asset = Net::HTTP.get(URI(uri))
+        asset.force_encoding('UTF-8') if asset
         asset = gzip(asset) if WickedPdf.config[:expect_gzipped_remote_assets]
         asset
       end
@@ -129,6 +184,30 @@ class WickedPdf
         gzipper.read
       rescue Zlib::GzipFile::Error
         nil
+      end
+
+      def webpacker_source_url(source)
+        return unless defined?(Webpacker) && defined?(Webpacker::VERSION)
+
+        # In Webpacker 3.2.0 asset_pack_url is introduced
+        if Webpacker::VERSION >= '3.2.0'
+          asset_pack_url(source)
+        else
+          source_path = asset_pack_path(source)
+          # Remove last slash from root path
+          root_url[0...-1] + source_path
+        end
+      end
+
+      def running_in_development?
+        return unless defined?(Webpacker)
+
+        # :dev_server method was added in webpacker 3.0.0
+        if Webpacker.respond_to?(:dev_server)
+          Webpacker.dev_server.running?
+        else
+          Rails.env.development? || Rails.env.test?
+        end
       end
     end
   end
